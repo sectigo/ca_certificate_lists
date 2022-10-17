@@ -10,7 +10,8 @@
 #      DETAIL:  User query might have needed to see row versions that must be removed.
 #   2. ERROR:  no more connections allowed (max_client_conn)
 
-cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch
+for i in {1..10}; do
+  cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch
 \COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
        get_ca_name_attribute(ca.ID) AS "Issuer Common Name",
@@ -135,3 +136,8 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
   ORDER BY "Issuer Common Name", "CA Certificate Type" DESC, x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256')
 ) TO 'list_for_audit.csv' CSV HEADER
 SQL
+echo "[Attempt $i]: psql returned $?."
+if [ "$?" -eq "0" ]; then
+  exit
+fi
+done
