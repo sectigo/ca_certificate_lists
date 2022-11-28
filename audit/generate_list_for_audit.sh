@@ -12,7 +12,7 @@
 
 for i in {1..10}; do
   cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch
-\\SET ON_ERROR_STOP on
+\\set ON_ERROR_STOP on
 \\COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
        get_ca_name_attribute(ca.ID) AS "Issuer Common Name",
