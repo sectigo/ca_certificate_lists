@@ -108,8 +108,9 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
 ) TO 'list_for_cp_cps_and_self_assessment.csv' CSV HEADER
 SQL
 
-  echo "[Attempt $i]: psql returned $?."
-  if [ "$?" -eq "0" ]; then
+  RESULT=$?
+  echo "[Attempt $i]: psql returned $RESULT."
+  if [ "$RESULT" -eq "0" ]; then
     exit
   fi
 done
