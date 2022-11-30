@@ -140,6 +140,12 @@ SQL
   RESULT=$?
   echo "[Attempt $i]: psql returned $RESULT."
   if [ "$RESULT" -eq "0" ]; then
-    exit
+    # Sanity check.
+    grep ",BRSSL," list_for_audit.csv > /dev/null
+    RESULT=$?
+    echo "[Attempt $i]; grep return $RESULT."
+    if [ "$RESULT" -eq "0" ]; then
+      exit
+    fi
   fi
 done

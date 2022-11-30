@@ -110,6 +110,12 @@ SQL
   RESULT=$?
   echo "[Attempt $i]: psql returned $RESULT."
   if [ "$RESULT" -eq "0" ]; then
-    exit
+    # Sanity check.
+    grep ",DS," list_for_cp_cps_and_self_assessment.csv > /dev/null
+    RESULT=$?
+    echo "[Attempt $i]; grep return $RESULT."
+    if [ "$RESULT" -eq "0" ]; then
+      exit
+    fi
   fi
 done
