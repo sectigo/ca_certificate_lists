@@ -113,7 +113,7 @@ SQL
     # Sanity check.
     grep ",DS," list_for_cp_cps_and_self_assessment.csv > /dev/null
     RESULT=$?
-    echo "[Attempt $i]; grep return $RESULT."
+    echo "[Attempt $i]: grep returned $RESULT."
     if [ "$RESULT" -eq "0" ]; then
       exit
     fi

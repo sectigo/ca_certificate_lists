@@ -143,7 +143,7 @@ SQL
     # Sanity check.
     grep ",BRSSL," list_for_audit.csv > /dev/null
     RESULT=$?
-    echo "[Attempt $i]; grep return $RESULT."
+    echo "[Attempt $i]: grep returned $RESULT."
     if [ "$RESULT" -eq "0" ]; then
       exit
     fi
