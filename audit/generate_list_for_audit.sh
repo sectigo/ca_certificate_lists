@@ -10,8 +10,10 @@
 #      DETAIL:  User query might have needed to see row versions that must be removed.
 #   2. ERROR:  no more connections allowed (max_client_conn)
 
+ERRORFILE=`mktemp`
+
 for i in {1..10}; do
-  cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X
+  cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
 \COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
        get_ca_name_attribute(ca.ID) AS "Issuer Common Name",
@@ -140,12 +142,13 @@ SQL
   RESULT=$?
   echo "[Attempt $i]: psql returned $RESULT."
   if [ "$RESULT" -eq "0" ]; then
-    # Sanity check.
-    grep ",BRSSL," list_for_audit.csv > /dev/null
+    grep ERROR $ERRORFILE >/dev/null
     RESULT=$?
-    echo "[Attempt $i]: grep returned $RESULT."
-    if [ "$RESULT" -eq "0" ]; then
-      exit
+    echo "[Attempt $i]: \"grep ERROR\" returned $RESULT."
+    if [ "$RESULT" -ne "0" ]; then
+      break
     fi
   fi
 done
+
+rm -f $ERRORFILE
