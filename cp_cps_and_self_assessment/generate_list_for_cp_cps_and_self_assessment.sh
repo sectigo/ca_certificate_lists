@@ -31,17 +31,17 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        CASE WHEN
            /* eIDAS CPS, excluding externally-operated CAs */
            (lower(cc.CPS_URL) LIKE '%eidas%')
-           AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') = 'Sectigo')
+           AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
          THEN 'eIDAS' ELSE 'n/a' END AS "eIDAS CPS?",
        CASE WHEN
            /* Document Signing CPS covers all CAs capable of and/or intended for Document Signing and Time Stamping CAs, excluding eIDAS and externally-operated CAs */
            (ctp_docsigning.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
-           AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') = 'Sectigo')
+           AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
          THEN 'DS' ELSE 'n/a' END AS "Document Signing CPS?",
        CASE WHEN
            /* Anything externally-operated is not governed by a Sectigo-controlled CPS */
-           coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') != 'Sectigo'
+           coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') NOT LIKE 'Sectigo%'
          THEN 'External' ELSE 'n/a' END AS "External CPS?",
        upper(encode(x509_serialNumber(c.CERTIFICATE), 'hex')) AS "Serial Number",
        upper(encode(x509_subjectKeyIdentifier(c.CERTIFICATE), 'hex')) AS "Subject Key Identifier"
