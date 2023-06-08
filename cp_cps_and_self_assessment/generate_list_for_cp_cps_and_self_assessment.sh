@@ -34,7 +34,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
          THEN 'eIDAS' ELSE 'n/a' END AS "eIDAS CPS?",
        CASE WHEN
-           /* Document Signing CPS covers all CAs capable of and/or intended for Document Signing and Time Stamping CAs, excluding eIDAS and externally-operated CAs */
+           /* Document Signing CPS covers all CAs capable of and/or intended for Document Signing and/or Time Stamping, excluding eIDAS and externally-operated CAs */
            (ctp_docsigning.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
@@ -53,18 +53,14 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
          )
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
-                         E'\\\\x29472BD6CC54563D2A9C454BA95322864FAEC99B0C07865758DDE37E3F10D7CC',  /* Sectigo Public Document Signing Root R46 */
-                         E'\\\\xA4DB8668C6796EBF476DDC5ACE453A9260DBD4DBB09F51ECEC9A839003824795',  /* Sectigo Public Time Stamping Root R46 */
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
-                         E'\\\\x5842C9C71852647D253475BE59CD43969A59B2E86D01E63B4BC529294D644D64',  /* Sectigo Public Document Signing Root E46 */
-                         E'\\\\xC39EE6DDCC1F6C0179D9F4584D08CD4926A9F1350CB09B3F5AA435F41F4CA1EB',  /* Sectigo Public Time Stamping Root E46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
-                       ) THEN 7  /* These Sectigo Public hierarchies are intended, but not yet trusted, for Document Signing and/or Time Stamping*/
+                       ) THEN 7  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them), but not yet trusted, for Document Signing and Time Stamping */
                        ELSE max(ctp1.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp1, trust_purpose tp1
              WHERE ctp1.CA_ID = cac.CA_ID
-               AND ctp1.TRUST_PURPOSE_ID IN (7, 14)  /* Document Signing, Adobe Authentic Document */
+               AND ctp1.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
                AND ctp1.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
          ) ctp_docsigning ON TRUE
