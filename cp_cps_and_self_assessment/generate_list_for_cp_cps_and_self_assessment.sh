@@ -106,15 +106,17 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
 SQL
 
   RESULT=$?
-  echo "[Attempt $i]: psql returned $RESULT."
+  cat $ERRORFILE
+  echo "[Attempt $i]: psql returned $RESULT (expecting 0)."
   if [ "$RESULT" -eq "0" ]; then
     grep ERROR $ERRORFILE >/dev/null
     RESULT=$?
-    echo "[Attempt $i]: \"grep ERROR\" returned $RESULT."
+    echo "[Attempt $i]: \"grep ERROR\" returned $RESULT (expecting !=0)."
     if [ "$RESULT" -ne "0" ]; then
       break
     fi
   fi
+  echo
 done
 
 rm -f $ERRORFILE
