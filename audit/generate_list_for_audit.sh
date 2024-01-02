@@ -25,8 +25,8 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        'CA' AS "WTCA?",
        CASE WHEN (ctp_brssl.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'BRSSL' END AS "WTBRSSL?",
        CASE WHEN ((ctp_brssl.TRUST_PURPOSE_ID IS NULL) OR (ctp_evssl.TRUST_PURPOSE_ID IS NULL)) THEN 'n/a' ELSE 'EVSSL' END AS "WTEVSSL?",
-       CASE WHEN (ctp_cs.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'PTCS' END AS "WTPTCS?",
-       CASE WHEN (ctp_cs.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'EVCS' END AS "WTEVCS?",
+       CASE WHEN (ctp_cs.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'CS' END AS "WTCS?",
+       CASE WHEN (ctp_smime.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'SMIME' END AS "WTSMIME?",
        upper(encode(x509_serialNumber(c.CERTIFICATE), 'hex')) AS "Serial Number",
        upper(encode(x509_subjectKeyIdentifier(c.CERTIFICATE), 'hex')) AS "Subject Key Identifier"
   FROM ca,
@@ -94,6 +94,19 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                AND ctp3.TRUST_PURPOSE_ID = tp3.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp3.PURPOSE_OID)
          ) ctp_cs ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
+                         E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
+                         E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
+                       ) THEN 3  /* These Sectigo Public hierarchies are intended to be considered as trusted for Email Protection */
+                       ELSE max(ctp3.TRUST_PURPOSE_ID)
+                  END AS TRUST_PURPOSE_ID
+             FROM ca_trust_purpose ctp4, trust_purpose tp4
+             WHERE ctp4.CA_ID = cac.CA_ID
+               AND ctp4.TRUST_PURPOSE_ID = 3  /* Email Protection */
+               AND ctp4.TRUST_PURPOSE_ID = tp4.ID
+               AND x509_isEKUPermitted(c.CERTIFICATE, tp4.PURPOSE_OID)
+         ) ctp_smime ON TRUE
   WHERE digest(ca.PUBLIC_KEY, 'sha256') IN (
       E'\\\\x2DA8F9EA3454D21146464A3F9D028DC4C7FBB57B1C52C73C2B0572A2F599A2D3',  /* UTN-USERFirst-Client Authentication and Email */
       E'\\\\x4D40E7AF4304A09DE87FBF9896204C055141E3F809B2FE733BB2310FDF98A162',  /* UTN-USERFirst-Hardware */
