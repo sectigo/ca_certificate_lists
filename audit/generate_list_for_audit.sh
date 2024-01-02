@@ -99,7 +99,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
                        ) THEN 3  /* These Sectigo Public hierarchies are intended to be considered as trusted for Email Protection */
-                       ELSE max(ctp3.TRUST_PURPOSE_ID)
+                       ELSE max(ctp4.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp4, trust_purpose tp4
              WHERE ctp4.CA_ID = cac.CA_ID
