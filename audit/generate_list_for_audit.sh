@@ -37,11 +37,9 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
          )
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
-                         E'\\\\x0E8BB18BBEEFB381BE21BFC1A206D317298462AD104855F04A0542699708D3D4',  /* Sectigo Public Server Authentication Root R46 */
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
-                         E'\\\\xB0B56335468561F5BB9FA12D801784A633A572705D34F32B643445DFA8B005D1',  /* Sectigo Public Server Authentication Root E46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
-                       ) THEN 1  /* These Sectigo Public hierarchies are intended, but not yet trusted, for SSL */
+                       ) THEN 1  /* These Sectigo Public hierarchies are intended to be considered as trusted for Server Authentication */
                        ELSE max(ctp1.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp1, trust_purpose tp1
@@ -56,15 +54,9 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
          ) ctp_brssl ON TRUE
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
-                         E'\\\\x0E8BB18BBEEFB381BE21BFC1A206D317298462AD104855F04A0542699708D3D4',  /* Sectigo Public Server Authentication Root R46 */
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
-                         E'\\\\xB0B56335468561F5BB9FA12D801784A633A572705D34F32B643445DFA8B005D1',  /* Sectigo Public Server Authentication Root E46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
-                       ) THEN 121  /* These Sectigo Public hierarchies are intended, but not yet trusted, for EV SSL */
-                       WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
-                         E'\\\\xF2A4E6B263D0A552ADFF5D85DC96B5820FD66AA0B18228F48FDB087C8DB34133',  /* Network Solutions RSA Certificate Authority */
-                         E'\\\\x7D6C3EBF9EA735D1854BEEA7CB941AB1E3503515E087BBB5BE695D05F2F556E4'   /* Network Solutions ECC Certificate Authority */
-                       ) THEN 122  /* Network Solutions {RSA,ECC} EV Server CAs are intended, but not yet trusted, for EV SSL */
+                       ) THEN 121  /* These Sectigo Public hierarchies are intended to be considered as trusted for Server Authentication */
                        ELSE max(ctp2.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp2, trust_purpose tp2
@@ -81,11 +73,9 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
                        ) THEN 4  /* These Sectigo Public hierarchies are intended, but not yet trusted, for Code Signing */
                        WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
-                         E'\\\\xA4DB8668C6796EBF476DDC5ACE453A9260DBD4DBB09F51ECEC9A839003824795',  /* Sectigo Public Time Stamping Root R46 */
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
-                         E'\\\\xC39EE6DDCC1F6C0179D9F4584D08CD4926A9F1350CB09B3F5AA435F41F4CA1EB',  /* Sectigo Public Time Stamping Root E46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
-                       ) THEN 5  /* These Sectigo Public hierarchies are intended, but not yet trusted, for Time Stamping */
+                       ) THEN 5  /* These Sectigo Public hierarchies are intended to be considered as trusted for Time Stamping */
                        ELSE max(ctp3.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp3, trust_purpose tp3
