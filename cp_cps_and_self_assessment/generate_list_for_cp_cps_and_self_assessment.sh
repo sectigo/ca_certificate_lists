@@ -9,6 +9,8 @@
 
 ERRORFILE=`mktemp`
 
+TIMESTAMP=`date -Iseconds | sed "s/+00:00$/Z/g"`
+
 for i in {1..10}; do
   cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
 \COPY (
@@ -19,8 +21,8 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        upper(encode(digest(x509_publicKey(c.CERTIFICATE), 'sha256'), 'hex')) AS "SHA-256(SubjectPublicKeyInfo)",
        x509_notBefore(c.CERTIFICATE) AS "Not Before",
        x509_notAfter(c.CERTIFICATE) AS "Not After",
-       CASE WHEN now() AT TIME ZONE 'UTC' > x509_notAfter(c.CERTIFICATE) THEN 'Expired' ELSE '' END AS "Is Expired?",
-       CASE WHEN cr.SERIAL_NUMBER IS NOT NULL THEN 'Revoked' ELSE '' END AS "Is Revoked?",
+       CASE WHEN now() AT TIME ZONE 'UTC' > x509_notAfter(c.CERTIFICATE) THEN 'Yes' ELSE 'No' END AS "Expired (before <timestamp>)?",
+       CASE WHEN cr.SERIAL_NUMBER IS NOT NULL THEN 'Yes' ELSE 'No' END AS "Revoked (before <timestamp>)?",
        coalesce(coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), cc.INCLUDED_CERTIFICATE_OWNER), 'Sectigo') AS "CA Owner",
        CASE WHEN
            /* Main CPS covers everything except single-purpose S/MIME, eIDAS, single-purpose Document Signing, and externally-operated CAs */
@@ -140,7 +142,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= now() AT TIME ZONE 'UTC'
-  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", "Is Expired?", "Is Revoked?", "CA Owner", "Main CPS?", "S/MIME CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
+  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "Main CPS?", "S/MIME CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer DN", "CA Certificate Type" DESC, "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)"
 ) TO 'list_for_cp_cps_and_self_assessment.csv' CSV HEADER
 SQL
@@ -153,6 +155,7 @@ SQL
     RESULT=$?
     echo "[Attempt $i]: \"grep ERROR\" returned $RESULT (expecting !=0)."
     if [ "$RESULT" -ne "0" ]; then
+      sed -i "s/<timestamp>/$TIMESTAMP/g" list_for_cp_cps_and_self_assessment.csv
       break
     fi
   fi
