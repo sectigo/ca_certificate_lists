@@ -5,7 +5,7 @@
 #
 # psql doesn't support multi-line \COPY statements, so we use the HEREDOC workaround described by https://minhajuddin.com/2017/05/18/how-to-pass-a-multi-line-copy-sql-to-psql/
 #
-# Since long-running crt.sh queries are often killed off for various reasons, this script makes multiple attempts.  If all of the attempts fail, try running this script again later.
+# Since long-running crt.sh:5432 queries are often killed off for various reasons, this script makes multiple attempts.  If all of the attempts fail, try running this script again later.
 
 ERRORFILE=`mktemp`
 
@@ -13,11 +13,14 @@ for i in {1..10}; do
   cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
 \COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
-       get_ca_name_attribute(ca.ID) AS "Issuer Common Name",
+       x509_issuerName(c.CERTIFICATE, 1310736) AS "Issuer DN",
        x509_subjectName(c.CERTIFICATE, 1310736) AS "Subject DN",
        upper(encode(digest(c.CERTIFICATE, 'sha256'), 'hex')) AS "SHA-256(Certificate)",
+       upper(encode(digest(x509_publicKey(c.CERTIFICATE), 'sha256'), 'hex')) AS "SHA-256(SubjectPublicKeyInfo)",
        x509_notBefore(c.CERTIFICATE) AS "Not Before",
        x509_notAfter(c.CERTIFICATE) AS "Not After",
+       CASE WHEN now() AT TIME ZONE 'UTC' > x509_notAfter(c.CERTIFICATE) THEN 'Expired' ELSE '' END AS "Is Expired?",
+       CASE WHEN cr.SERIAL_NUMBER IS NOT NULL THEN 'Revoked' ELSE '' END AS "Is Revoked?",
        coalesce(coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), cc.INCLUDED_CERTIFICATE_OWNER), 'Sectigo') AS "CA Owner",
        CASE WHEN
            /* Main CPS covers everything except single-purpose S/MIME, eIDAS, single-purpose Document Signing, and externally-operated CAs */
@@ -49,7 +52,11 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        upper(encode(x509_serialNumber(c.CERTIFICATE), 'hex')) AS "Serial Number",
        upper(encode(x509_subjectKeyIdentifier(c.CERTIFICATE), 'hex')) AS "Subject Key Identifier"
   FROM ca,
-       certificate c,
+       certificate c
+         LEFT JOIN crl_revoked cr ON (
+           c.ISSUER_CA_ID = cr.CA_ID
+           AND x509_serialNumber(c.CERTIFICATE) = cr.SERIAL_NUMBER
+         ),
        ca_certificate cac
          LEFT JOIN ccadb_certificate cc ON (
            cac.CERTIFICATE_ID = cc.CERTIFICATE_ID
@@ -133,8 +140,8 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= now() AT TIME ZONE 'UTC'
-  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "Main CPS?", "S/MIME CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
-  ORDER BY "Issuer Common Name", "CA Certificate Type" DESC, x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256')
+  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", "Is Expired?", "Is Revoked?", "CA Owner", "Main CPS?", "S/MIME CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
+  ORDER BY "Issuer DN", "CA Certificate Type" DESC, "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)"
 ) TO 'list_for_cp_cps_and_self_assessment.csv' CSV HEADER
 SQL
 
