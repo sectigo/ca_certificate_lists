@@ -21,8 +21,8 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        upper(encode(digest(x509_publicKey(c.CERTIFICATE), 'sha256'), 'hex')) AS "SHA-256(SubjectPublicKeyInfo)",
        x509_notBefore(c.CERTIFICATE) AS "Not Before",
        x509_notAfter(c.CERTIFICATE) AS "Not After",
-       CASE WHEN now() AT TIME ZONE 'UTC' > x509_notAfter(c.CERTIFICATE) THEN 'Yes' ELSE 'No' END AS "Expired (before <timestamp>)?",
-       CASE WHEN cr.SERIAL_NUMBER IS NOT NULL THEN 'Yes' ELSE 'No' END AS "Revoked (before <timestamp>)?",
+       CASE WHEN now() AT TIME ZONE 'UTC' > x509_notAfter(c.CERTIFICATE) THEN 'Yes' ELSE 'No' END AS "Expired (checked at <timestamp>)?",
+       CASE WHEN cr.SERIAL_NUMBER IS NOT NULL THEN 'Yes' ELSE 'No' END AS "Revoked (checked at <timestamp>)?",
        coalesce(coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), cc.INCLUDED_CERTIFICATE_OWNER), 'Sectigo') AS "CA Owner",
        CASE WHEN
            /* Main CPS covers everything except single-purpose S/MIME, eIDAS, single-purpose Document Signing, and externally-operated CAs */
