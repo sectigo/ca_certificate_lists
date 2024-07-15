@@ -38,7 +38,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
          THEN 'S/MIME' ELSE 'n/a' END AS "S/MIME CPS?",
        CASE WHEN
            /* eIDAS CPS, excluding externally-operated CAs */
-           (lower(cc.CPS_URL) LIKE '%eidas%')
+           ((lower(cc.CPS_URL) LIKE '%eidas%') OR (cc.CERT_NAME LIKE 'Sectigo Qualified%'))
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
          THEN 'eIDAS' ELSE 'n/a' END AS "eIDAS CPS?",
        CASE WHEN
@@ -79,6 +79,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                AND ctp1.TRUST_PURPOSE_ID NOT IN (2, 3, 7, 14)  /* Client Authentication, Secure Email, Document Signing, Adobe Authentic Document */
                AND ctp1.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
+               AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_main ON TRUE
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
@@ -92,6 +93,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                AND ctp1.TRUST_PURPOSE_ID = 3  /* Secure Email */
                AND ctp1.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
+               AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_smime ON TRUE
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
@@ -105,6 +107,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                AND ctp1.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
                AND ctp1.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
+               AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_docsigning ON TRUE
   WHERE digest(ca.PUBLIC_KEY, 'sha256') IN (
       E'\\\\x2DA8F9EA3454D21146464A3F9D028DC4C7FBB57B1C52C73C2B0572A2F599A2D3',  /* UTN-USERFirst-Client Authentication and Email */
@@ -136,7 +139,12 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
       E'\\\\x1679B889B408FD06CE0E96994D2C47AA35CAE25562A6B9A2E5574D2598BCA0D8',  /* Sectigo Public Code Signing Root E46 */
       E'\\\\xC39EE6DDCC1F6C0179D9F4584D08CD4926A9F1350CB09B3F5AA435F41F4CA1EB',  /* Sectigo Public Time Stamping Root E46 */
       E'\\\\x5842C9C71852647D253475BE59CD43969A59B2E86D01E63B4BC529294D644D64',  /* Sectigo Public Document Signing Root E46 */
-      E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
+      E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
+      E'\\\\x60181E5DCA7F32C0624A38328BB03E26D833EC26B2B055246650C4CED4CEE966',  /* Sectigo Qualified Legal Person Root R45 */
+      E'\\\\xBCC15F470BBD39F510FAF40537AE490CDA91261B80EEC2E6198802C21F696C51',  /* Sectigo Qualified Natural Person Root R45 */
+      E'\\\\x249A62465E28D403786FD9C9517E89052AE36F3A3610DC196505E56C38EA4CA7',  /* Sectigo Qualified Time Stamping Root R45 */
+      E'\\\\xD66EA3AF34602C6A84AEB342D06E09A9BBC2CE0262BA496713EB8BAEC14EAF26',  /* Sectigo Qualified Legal Person Root E45 */
+      E'\\\\x84C0A056345DC9DDC0B42BE4A4B3F66BA538F18552EB058E710F92E05C05721E'   /* Sectigo Qualified Natural Person Root E45 */
     )
     AND ca.ID = c.ISSUER_CA_ID
     AND x509_canIssueCerts(c.CERTIFICATE)
