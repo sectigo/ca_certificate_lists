@@ -12,7 +12,7 @@ ERRORFILE=`mktemp`
 TIMESTAMP=`date -Iseconds | sed "s/+00:00$/Z/g"`
 
 for i in {1..10}; do
-  cat <<SQL | tr -d '\n' | psql -h localhost -p 5432 -U certwatch -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
+  cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
 \COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
        x509_issuerName(c.CERTIFICATE, 1310736) AS "Issuer DN",
