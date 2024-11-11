@@ -25,17 +25,23 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        CASE WHEN cr.SERIAL_NUMBER IS NOT NULL THEN 'Yes' ELSE 'No' END AS "Revoked (checked at <timestamp>)?",
        coalesce(coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), cc.INCLUDED_CERTIFICATE_OWNER), 'Sectigo') AS "CA Owner",
        CASE WHEN
-           /* Main CPS covers everything except single-purpose S/MIME, eIDAS, single-purpose Document Signing, and externally-operated CAs */
-           (ctp_main.TRUST_PURPOSE_ID IS NOT NULL)
+           /* TLS CPS covers all CAs capable of and/or intended for Server Authentication, excluding eIDAS and externally-operated CAs */
+           (ctp_tls.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
-         THEN 'Main' ELSE 'n/a' END AS "Main CPS?",
+         THEN 'TLS' ELSE 'n/a' END AS "TLS CPS?",
        CASE WHEN
            /* S/MIME CPS covers all CAs capable of and/or intended for Secure Email, excluding eIDAS and externally-operated CAs */
            (ctp_smime.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
          THEN 'S/MIME' ELSE 'n/a' END AS "S/MIME CPS?",
+       CASE WHEN
+           /* Code Signing CPS covers all CAs capable of and/or intended for Code Signing and/or Time Stamping, excluding eIDAS and externally-operated CAs */
+           (ctp_codesigning.TRUST_PURPOSE_ID IS NOT NULL)
+           AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
+           AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
+         THEN 'CS' ELSE 'n/a' END AS "Code Signing CPS?",
        CASE WHEN
            /* eIDAS CPS, excluding externally-operated CAs */
            ((lower(cc.CPS_URL) LIKE '%eidas%') OR (cc.CERT_NAME LIKE 'Sectigo Qualified%'))
@@ -68,7 +74,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                          /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted */
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
-                         /* These multi-purpose Sectigo roots are no longer trusted, but are still in scope for our Main CPS */
+                         /* These multi-purpose Sectigo roots are no longer trusted, but are still in scope for our TLS CPS */
                          E'\\\\x4691CBFDE84A6B6052DDBE152BB0C216AE25A86E5747813DBC0F147F338570BE',  /* Secure Certificate Services */
                          E'\\\\xE2D891EFB738669105D530DE5ED72E2B2AC3F4A67078B5349B3FDACA496F5EB8'   /* Trusted Certificate Services */
                        ) THEN 1
@@ -76,22 +82,22 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp1, trust_purpose tp1
              WHERE ctp1.CA_ID = cac.CA_ID
-               AND ctp1.TRUST_PURPOSE_ID NOT IN (2, 3, 7, 14)  /* Client Authentication, Secure Email, Document Signing, Adobe Authentic Document */
+               AND ctp1.TRUST_PURPOSE_ID = 1  /* Server Authentication */
                AND ctp1.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
                AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
-         ) ctp_main ON TRUE
+         ) ctp_tls ON TRUE
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
                        ) THEN 3  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Secure Email */
-                       ELSE max(ctp1.TRUST_PURPOSE_ID)
+                       ELSE max(ctp2.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
-             FROM ca_trust_purpose ctp1, trust_purpose tp1
-             WHERE ctp1.CA_ID = cac.CA_ID
-               AND ctp1.TRUST_PURPOSE_ID = 3  /* Secure Email */
-               AND ctp1.TRUST_PURPOSE_ID = tp1.ID
+             FROM ca_trust_purpose ctp2, trust_purpose tp1
+             WHERE ctp2.CA_ID = cac.CA_ID
+               AND ctp2.TRUST_PURPOSE_ID = 3  /* Secure Email */
+               AND ctp2.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
                AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_smime ON TRUE
@@ -99,13 +105,27 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
-                       ) THEN 7  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Document Signing and/or Time Stamping */
-                       ELSE max(ctp1.TRUST_PURPOSE_ID)
+                       ) THEN 4  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Code Signing and/or Time Stamping */
+                       ELSE max(ctp3.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
-             FROM ca_trust_purpose ctp1, trust_purpose tp1
-             WHERE ctp1.CA_ID = cac.CA_ID
-               AND ctp1.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
-               AND ctp1.TRUST_PURPOSE_ID = tp1.ID
+             FROM ca_trust_purpose ctp3, trust_purpose tp1
+             WHERE ctp3.CA_ID = cac.CA_ID
+               AND ctp3.TRUST_PURPOSE_ID IN (4, 5)  /* Code Signing, Time Stamping */
+               AND ctp3.TRUST_PURPOSE_ID = tp1.ID
+               AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
+               AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
+         ) ctp_codesigning ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
+                         E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
+                         E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
+                       ) THEN 7  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Document Signing and/or Time Stamping */
+                       ELSE max(ctp4.TRUST_PURPOSE_ID)
+                  END AS TRUST_PURPOSE_ID
+             FROM ca_trust_purpose ctp4, trust_purpose tp1
+             WHERE ctp4.CA_ID = cac.CA_ID
+               AND ctp4.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
+               AND ctp4.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp1.PURPOSE_OID)
                AND NOT cc.CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_docsigning ON TRUE
@@ -150,7 +170,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= now() AT TIME ZONE 'UTC'
-  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "Main CPS?", "S/MIME CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
+  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "TLS CPS?", "S/MIME CPS?", "Code Signing CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer DN", "CA Certificate Type" DESC, "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)"
 ) TO 'list_for_cp_cps_and_self_assessment.csv' CSV HEADER
 SQL
