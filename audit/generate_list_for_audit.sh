@@ -125,8 +125,8 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND ca.ID = c.ISSUER_CA_ID
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND c.ID = cac.CERTIFICATE_ID
-    AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= '2023-04-01'::date
-    AND x509_notBefore(c.CERTIFICATE) < '2024-04-01'::date
+    AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= '2024-04-01'::date
+    AND x509_notBefore(c.CERTIFICATE) < '2025-04-01'::date
   GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer Common Name", "CA Certificate Type" DESC, x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256')
 ) TO 'list_for_audit.csv' CSV HEADER
