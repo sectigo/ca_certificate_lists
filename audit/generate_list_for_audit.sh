@@ -23,6 +23,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        x509_notAfter(c.CERTIFICATE) AS "Not After",
        coalesce(coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), cc.INCLUDED_CERTIFICATE_OWNER), 'Sectigo') AS "CA Owner",
        'CA' AS "WTCA?",
+       'NETSEC' AS "WTNETSEC?",
        CASE WHEN (ctp_brssl.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'BRSSL' END AS "WTBRSSL?",
        CASE WHEN ((ctp_brssl.TRUST_PURPOSE_ID IS NULL) OR (ctp_evssl.TRUST_PURPOSE_ID IS NULL)) THEN 'n/a' ELSE 'EVSSL' END AS "WTEVSSL?",
        CASE WHEN (ctp_cs.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'CS' END AS "WTCS?",
@@ -125,7 +126,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= '2024-04-01'::date
     AND x509_notBefore(c.CERTIFICATE) < '2025-04-01'::date
-  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "Serial Number", "Subject Key Identifier"
+  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTNETSEC?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer Common Name", "CA Certificate Type" DESC, x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256')
 ) TO 'list_for_audit.csv' CSV HEADER
 SQL
