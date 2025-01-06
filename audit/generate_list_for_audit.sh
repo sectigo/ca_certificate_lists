@@ -67,9 +67,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
          ) ctp_evssl ON TRUE
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
-                         E'\\\\x3537D13105F4518B938439CA8A91363E4DA3AAAD5B7A8EB15A66E7B64156BF91',  /* Sectigo Public Code Signing Root R46 */
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
-                         E'\\\\x1679B889B408FD06CE0E96994D2C47AA35CAE25562A6B9A2E5574D2598BCA0D8',  /* Sectigo Public Code Signing Root E46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
                        ) THEN 4  /* These Sectigo Public hierarchies are intended, but not yet trusted, for Code Signing */
                        WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
