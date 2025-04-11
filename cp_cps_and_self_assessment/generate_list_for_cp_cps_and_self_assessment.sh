@@ -170,7 +170,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= now() AT TIME ZONE 'UTC'
-  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "TLS CPS?", "S/MIME CPS?", "Code Signing CPS?", "eIDAS CPS?", "Document Signing CPS?", "External CPS?", "Serial Number", "Subject Key Identifier"
+  GROUP BY c.CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "TLS?", "S/MIME?", "Code Signing?", "eIDAS?", "Document Signing?", "External?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer DN", "CA Certificate Type" DESC, "Subject DN", "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)"
 ) TO 'list_for_cp_cps_and_self_assessment.csv' CSV HEADER
 SQL
