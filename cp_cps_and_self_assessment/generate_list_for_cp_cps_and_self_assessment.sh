@@ -29,34 +29,34 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
            (ctp_tls.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
-         THEN 'TLS' ELSE 'n/a' END AS "TLS CPS?",
+         THEN 'TLS' ELSE 'n/a' END AS "TLS?",
        CASE WHEN
            /* S/MIME CPS covers all CAs capable of and/or intended for Secure Email, excluding eIDAS and externally-operated CAs */
            (ctp_smime.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
-         THEN 'S/MIME' ELSE 'n/a' END AS "S/MIME CPS?",
+         THEN 'S/MIME' ELSE 'n/a' END AS "S/MIME?",
        CASE WHEN
            /* Code Signing CPS covers all CAs capable of and/or intended for Code Signing and/or Time Stamping, excluding eIDAS and externally-operated CAs */
            (ctp_codesigning.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
-         THEN 'CS' ELSE 'n/a' END AS "Code Signing CPS?",
+         THEN 'CS' ELSE 'n/a' END AS "Code Signing?",
        CASE WHEN
            /* eIDAS CPS, excluding externally-operated CAs */
            ((lower(cc.CPS_URL) LIKE '%eidas%') OR (cc.CERT_NAME LIKE 'Sectigo Qualified%'))
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
-         THEN 'eIDAS' ELSE 'n/a' END AS "eIDAS CPS?",
+         THEN 'eIDAS' ELSE 'n/a' END AS "eIDAS?",
        CASE WHEN
            /* Document Signing CPS covers all CAs capable of and/or intended for Document Signing and/or Time Stamping, excluding eIDAS and externally-operated CAs */
            (ctp_docsigning.TRUST_PURPOSE_ID IS NOT NULL)
            AND (lower(coalesce(cc.CPS_URL, '')) NOT LIKE '%eidas%')
            AND (coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
-         THEN 'DS' ELSE 'n/a' END AS "Document Signing CPS?",
+         THEN 'DS' ELSE 'n/a' END AS "Document Signing?",
        CASE WHEN
            /* Anything externally-operated is not governed by a Sectigo-controlled CPS */
            coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') NOT LIKE 'Sectigo%'
-         THEN 'External' ELSE 'n/a' END AS "External CPS?",
+         THEN 'External' ELSE 'n/a' END AS "External?",
        upper(encode(x509_serialNumber(c.CERTIFICATE), 'hex')) AS "Serial Number",
        upper(encode(x509_subjectKeyIdentifier(c.CERTIFICATE), 'hex')) AS "Subject Key Identifier"
   FROM ca,
