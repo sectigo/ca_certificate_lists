@@ -140,7 +140,7 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp1, trust_purpose tp1
              WHERE ctp1.CA_ID = sc.SUB_CA_ID
-               AND ctp1.TRUST_CONTEXT_ID IN (12, 6, 13, 1, 5)  /* CCADB Root Store Members: Apple, Chrome, Cisco, Microsoft, Mozilla */
+               AND ctp1.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
                AND ctp1.TRUST_PURPOSE_ID = 1  /* Server Authentication */
                AND ctp1.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
@@ -155,7 +155,7 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp2, trust_purpose tp1
              WHERE ctp2.CA_ID = sc.SUB_CA_ID
-               AND ctp2.TRUST_CONTEXT_ID IN (12, 6, 13, 1, 5)  /* CCADB Root Store Members: Apple, Chrome, Cisco, Microsoft, Mozilla */
+               AND ctp2.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
                AND ctp2.TRUST_PURPOSE_ID = 3  /* Secure Email */
                AND ctp2.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
@@ -170,7 +170,7 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp3, trust_purpose tp1
              WHERE ctp3.CA_ID = sc.SUB_CA_ID
-               AND ctp3.TRUST_CONTEXT_ID IN (12, 6, 13, 1, 5)  /* CCADB Root Store Members: Apple, Chrome, Cisco, Microsoft, Mozilla */
+               AND ctp3.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
                AND ctp3.TRUST_PURPOSE_ID IN (4, 5)  /* Code Signing, Time Stamping */
                AND ctp3.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
@@ -185,7 +185,7 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp4, trust_purpose tp1
              WHERE ctp4.CA_ID = sc.SUB_CA_ID
-               AND ctp4.TRUST_CONTEXT_ID IN (12, 6, 13, 1, 5)  /* CCADB Root Store Members: Apple, Chrome, Cisco, Microsoft, Mozilla */
+               AND ctp4.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
                AND ctp4.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
                AND ctp4.TRUST_PURPOSE_ID = tp1.ID
                AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
