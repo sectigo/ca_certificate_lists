@@ -13,7 +13,7 @@
 ERRORFILE=`mktemp`
 
 for i in {1..10}; do
-  cat <<SQL | tr -d '\n' | PGOPTIONS='-c join_collapse_limit=12' psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
+  cat <<SQL | tr -d '\n' | PGOPTIONS='-c join_collapse_limit=1' psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
 \COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
        get_ca_name_attribute(ca.ID) AS "Issuer Common Name",
@@ -31,9 +31,13 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        CASE WHEN (ctp_bimi.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'MC' END AS "WTMC?",
        upper(encode(x509_serialNumber(c.CERTIFICATE), 'hex')) AS "Serial Number",
        upper(encode(x509_subjectKeyIdentifier(c.CERTIFICATE), 'hex')) AS "Subject Key Identifier"
-  FROM ca,
-       certificate c,
-       ca_certificate cac
+  FROM ca_certificate cac
+         INNER JOIN certificate c ON (
+           c.ID = cac.CERTIFICATE_ID
+         )
+         INNER JOIN ca ON (
+           ca.ID = c.ISSUER_CA_ID
+         )
          LEFT JOIN ccadb_certificate cc ON (
            cac.CERTIFICATE_ID = cc.CERTIFICATE_ID
          )
@@ -146,9 +150,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
       E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
       E'\\\\x0783D68C14CFE5EB1EAFDA2AA984B7E3A4B8BAB000092D2BA02F73757558FDFD'   /* Sectigo BIMI Root R49 */
     )
-    AND ca.ID = c.ISSUER_CA_ID
     AND x509_canIssueCerts(c.CERTIFICATE)
-    AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= '2025-04-01'::date
     AND x509_notBefore(c.CERTIFICATE) < '2026-04-01'::date
   GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTNETSEC?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "WTMC?", "Serial Number", "Subject Key Identifier"
