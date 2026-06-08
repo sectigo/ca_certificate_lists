@@ -105,8 +105,9 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
-                         E'\\\\xE7B48348A39B9E46278D1E65C95040D3C0FEF5DFA0C7F1AAA47EBC94320E9D9F'   /* Sectigo BIMI Root R49 */
-                       ) THEN 15  /* These Sectigo Public hierarchies are intended to be considered as trusted for BIMI */
+                         E'\\\\xE7B48348A39B9E46278D1E65C95040D3C0FEF5DFA0C7F1AAA47EBC94320E9D9F',  /* Sectigo BIMI Root R49 */
+                         E'\\\\x6283D2CDAAC34F0690FFD3D51C8B9F98419CD617CFB0FEE01197BCF241ED3886'   /* Entrust Verified Mark Root Certification Authority - VMCR1 */
+                       ) THEN 15  /* These hierarchies are intended to be considered as trusted for BIMI */
                        ELSE max(ctp5.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
              FROM ca_trust_purpose ctp5, trust_purpose tp5
