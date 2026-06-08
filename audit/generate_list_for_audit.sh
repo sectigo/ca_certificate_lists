@@ -22,6 +22,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        x509_notBefore(c.CERTIFICATE) AS "Not Before",
        x509_notAfter(c.CERTIFICATE) AS "Not After",
        coalesce(coalesce(nullif(cc.SUBORDINATE_CA_OWNER, ''), cc.INCLUDED_CERTIFICATE_OWNER), 'Sectigo') AS "CA Owner",
+       cc.REVOCATION_STATUS AS "CCADB Revocation Status",
        'CA' AS "WTCA?",
        'NETSEC' AS "WTNETSEC?",
        CASE WHEN (ctp_brssl.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'BRSSL' END AS "WTBRSSL?",
@@ -154,7 +155,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= '2025-04-01'::date
     AND x509_notBefore(c.CERTIFICATE) < '2026-04-01'::date
-  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTNETSEC?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "WTMC?", "Serial Number", "Subject Key Identifier"
+  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "CCADB Revocation Status", "WTCA?", "WTNETSEC?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "WTMC?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer Common Name", "CA Certificate Type" DESC, x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256')
 ) TO 'list_for_audit.csv' CSV HEADER
 SQL
