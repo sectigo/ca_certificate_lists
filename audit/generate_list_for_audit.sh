@@ -28,6 +28,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
        CASE WHEN ((ctp_brssl.TRUST_PURPOSE_ID IS NULL) OR (ctp_evssl.TRUST_PURPOSE_ID IS NULL)) THEN 'n/a' ELSE 'EVSSL' END AS "WTEVSSL?",
        CASE WHEN (ctp_cs.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'CS' END AS "WTCS?",
        CASE WHEN (ctp_smime.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'SMIME' END AS "WTSMIME?",
+       CASE WHEN (ctp_bimi.TRUST_PURPOSE_ID IS NULL) THEN 'n/a' ELSE 'MC' END AS "WTMC?",
        upper(encode(x509_serialNumber(c.CERTIFICATE), 'hex')) AS "Serial Number",
        upper(encode(x509_subjectKeyIdentifier(c.CERTIFICATE), 'hex')) AS "Subject Key Identifier"
   FROM ca,
@@ -96,6 +97,20 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
                AND ctp4.TRUST_PURPOSE_ID = tp4.ID
                AND x509_isEKUPermitted(c.CERTIFICATE, tp4.PURPOSE_OID)
          ) ctp_smime ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
+                         E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
+                         E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
+                         E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD'   /* Sectigo BIMI Root R49 */
+                       ) THEN 15  /* These Sectigo Public hierarchies are intended to be considered as trusted for BIMI */
+                       ELSE max(ctp5.TRUST_PURPOSE_ID)
+                  END AS TRUST_PURPOSE_ID
+             FROM ca_trust_purpose ctp5, trust_purpose tp5
+             WHERE ctp5.CA_ID = cac.CA_ID
+               AND ctp5.TRUST_PURPOSE_ID = 15  /* BIMI */
+               AND ctp5.TRUST_PURPOSE_ID = tp5.ID
+               AND x509_isEKUPermitted(c.CERTIFICATE, tp5.PURPOSE_OID)
+         ) ctp_bimi ON TRUE
   WHERE digest(ca.PUBLIC_KEY, 'sha256') IN (
       E'\\\\x1EA3C5E43ED66C2DA2983A42A4A79B1E906786CE9F1B58621419A00463A87D38',  /* Entrust.net Certification Authority (2048) */
       E'\\\\x1FE851D6D28421FBAEA0714A85C5E63CBE46E1977B2F37B95C8EDEBE08D64B50',  /* Entrust Code Signing Root Certification Authority - CSBR1 */
@@ -128,14 +143,15 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
       E'\\\\x1679B889B408FD06CE0E96994D2C47AA35CAE25562A6B9A2E5574D2598BCA0D8',  /* Sectigo Public Code Signing Root E46 */
       E'\\\\xC39EE6DDCC1F6C0179D9F4584D08CD4926A9F1350CB09B3F5AA435F41F4CA1EB',  /* Sectigo Public Time Stamping Root E46 */
       E'\\\\x5842C9C71852647D253475BE59CD43969A59B2E86D01E63B4BC529294D644D64',  /* Sectigo Public Document Signing Root E46 */
-      E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
+      E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
+      E'\\\\x0783D68C14CFE5EB1EAFDA2AA984B7E3A4B8BAB000092D2BA02F73757558FDFD'   /* Sectigo BIMI Root R49 */
     )
     AND ca.ID = c.ISSUER_CA_ID
     AND x509_canIssueCerts(c.CERTIFICATE)
     AND c.ID = cac.CERTIFICATE_ID
     AND coalesce(x509_notAfter(c.CERTIFICATE), 'infinity'::date) >= '2025-04-01'::date
     AND x509_notBefore(c.CERTIFICATE) < '2026-04-01'::date
-  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTNETSEC?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "Serial Number", "Subject Key Identifier"
+  GROUP BY "Issuer Common Name", "CA Certificate Type", x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256'), "CA Owner", "WTCA?", "WTNETSEC?", "WTBRSSL?", "WTEVSSL?", "WTCS?", "WTSMIME?", "WTMC?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer Common Name", "CA Certificate Type" DESC, x509_subjectName(c.CERTIFICATE, 1310736), "Not Before", "Not After", digest(ca.PUBLIC_KEY, 'sha256'), digest(c.CERTIFICATE, 'sha256')
 ) TO 'list_for_audit.csv' CSV HEADER
 SQL
