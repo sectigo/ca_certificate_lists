@@ -13,7 +13,7 @@
 ERRORFILE=`mktemp`
 
 for i in {1..10}; do
-  cat <<SQL | tr -d '\n' | psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
+  cat <<SQL | tr -d '\n' | PGOPTIONS='-c join_collapse_limit=12' psql -h crt.sh -p 5432 -U guest -d certwatch -v ON_ERROR_STOP=1 -X 2>$ERRORFILE
 \COPY (
 SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END AS "CA Certificate Type",
        get_ca_name_attribute(ca.ID) AS "Issuer Common Name",
@@ -101,7 +101,7 @@ SELECT CASE WHEN c.ISSUER_CA_ID = cac.CA_ID THEN 'Root' ELSE 'Intermediate' END 
            SELECT CASE WHEN digest(ca.PUBLIC_KEY, 'sha256') IN (
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
                          E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
-                         E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD'   /* Sectigo BIMI Root R49 */
+                         E'\\\\x0783D68C14CFE5EB1EAFDA2AA984B7E3A4B8BAB000092D2BA02F73757558FDFD'   /* Sectigo BIMI Root R49 */
                        ) THEN 15  /* These Sectigo Public hierarchies are intended to be considered as trusted for BIMI */
                        ELSE max(ctp5.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
