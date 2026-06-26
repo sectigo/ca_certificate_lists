@@ -116,6 +116,12 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
            AND (coalesce(nullif(sc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
          THEN 'CS' ELSE 'n/a' END AS "Code Signing?",
        CASE WHEN
+           /* Mark Certificate CPS covers all CAs capable of and/or intended for BIMI, excluding eIDAS and externally-operated CAs */
+           (ctp_bimi.TRUST_PURPOSE_ID IS NOT NULL)
+           AND (lower(coalesce(sc.CPS_URL, '')) NOT LIKE '%eidas%')
+           AND (coalesce(nullif(sc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
+         THEN 'BIMI' ELSE 'n/a' END AS "BIMI?",
+       CASE WHEN
            /* eIDAS CPS, excluding externally-operated CAs */
            ((lower(sc.CPS_URL) LIKE '%eidas%') OR (sc.SUB_CERT_NAME LIKE 'Sectigo Qualified%'))
            AND (coalesce(nullif(sc.SUBORDINATE_CA_OWNER, ''), 'Sectigo') LIKE 'Sectigo%')
@@ -160,12 +166,12 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
                        ) THEN 3  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Secure Email */
                        ELSE max(ctp2.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
-             FROM ca_trust_purpose ctp2, trust_purpose tp1
+             FROM ca_trust_purpose ctp2, trust_purpose tp2
              WHERE ctp2.CA_ID = sc.SUB_CA_ID
                AND ctp2.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
                AND ctp2.TRUST_PURPOSE_ID = 3  /* Secure Email */
-               AND ctp2.TRUST_PURPOSE_ID = tp1.ID
-               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
+               AND ctp2.TRUST_PURPOSE_ID = tp2.ID
+               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp2.PURPOSE_OID)
                AND NOT sc.SUB_CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_smime ON TRUE
          LEFT JOIN LATERAL (
@@ -175,30 +181,47 @@ SELECT CASE WHEN sc.ROOT_CA_ID = sc.SUB_CA_ID THEN 'Root' ELSE 'Intermediate' EN
                        ) THEN 4  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Code Signing and/or Time Stamping */
                        ELSE max(ctp3.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
-             FROM ca_trust_purpose ctp3, trust_purpose tp1
+             FROM ca_trust_purpose ctp3, trust_purpose tp3
              WHERE ctp3.CA_ID = sc.SUB_CA_ID
                AND ctp3.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
                AND ctp3.TRUST_PURPOSE_ID IN (4, 5)  /* Code Signing, Time Stamping */
-               AND ctp3.TRUST_PURPOSE_ID = tp1.ID
-               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
+               AND ctp3.TRUST_PURPOSE_ID = tp3.ID
+               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp3.PURPOSE_OID)
                AND NOT sc.SUB_CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_codesigning ON TRUE
          LEFT JOIN LATERAL (
            SELECT CASE WHEN digest(sc.ROOT_PUBLIC_KEY, 'sha256') IN (
                          E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
-                         E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
-                       ) THEN 7  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Document Signing and/or Time Stamping */
+                         E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9',  /* Sectigo Public Root E46 */
+                         E'\\\\xE7B48348A39B9E46278D1E65C95040D3C0FEF5DFA0C7F1AAA47EBC94320E9D9F',  /* Sectigo BIMI Root R49 */
+                         E'\\\\x6283D2CDAAC34F0690FFD3D51C8B9F98419CD617CFB0FEE01197BCF241ED3886'   /* Entrust Verified Mark Root Certification Authority - VMCR1 */
+                       ) THEN 15  /* These hierarchies are intended to be considered as trusted for BIMI */
                        ELSE max(ctp4.TRUST_PURPOSE_ID)
                   END AS TRUST_PURPOSE_ID
-             FROM ca_trust_purpose ctp4, trust_purpose tp1
+             FROM ca_trust_purpose ctp4, trust_purpose tp4
              WHERE ctp4.CA_ID = sc.SUB_CA_ID
                AND ctp4.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
-               AND ctp4.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
-               AND ctp4.TRUST_PURPOSE_ID = tp1.ID
-               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp1.PURPOSE_OID)
+               AND ctp4.TRUST_PURPOSE_ID = 15  /* Brand Indicator for Message Identification */
+               AND ctp4.TRUST_PURPOSE_ID = tp4.ID
+               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp4.PURPOSE_OID)
+               AND NOT sc.SUB_CERT_NAME LIKE 'Sectigo Qualified%'
+         ) ctp_bimi ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN digest(sc.ROOT_PUBLIC_KEY, 'sha256') IN (
+                         E'\\\\x94960A01B0B5EEEE029AF6E83B61CE8146BEA51DA7566E2D3485EF7BF90B78FD',  /* Sectigo Public Root R46 */
+                         E'\\\\x8674E7A6B729A1375D9BF2FCEEC5D12F7EF73FFD09F452E4905B2213052A17B9'   /* Sectigo Public Root E46 */
+                       ) THEN 7  /* These multi-purpose Sectigo Public Roots are "intended" (although hopefully we will never have to use them) to be, but are not yet, trusted for Document Signing and/or Time Stamping */
+                       ELSE max(ctp5.TRUST_PURPOSE_ID)
+                  END AS TRUST_PURPOSE_ID
+             FROM ca_trust_purpose ctp5, trust_purpose tp5
+             WHERE ctp5.CA_ID = sc.SUB_CA_ID
+               AND ctp5.TRUST_CONTEXT_ID != 23  /* Ignore the Java root store, which enables all roots for all purposes */
+               AND ctp5.TRUST_PURPOSE_ID IN (7, 5, 14)  /* Document Signing, Time Stamping, Adobe Authentic Document */
+               AND ctp5.TRUST_PURPOSE_ID = tp5.ID
+               AND x509_isEKUPermitted(sc.SUB_CERTIFICATE, tp5.PURPOSE_OID)
                AND NOT sc.SUB_CERT_NAME LIKE 'Sectigo Qualified%'
          ) ctp_docsigning ON TRUE
-  GROUP BY sc.SUB_CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(sc.ROOT_PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "TLS?", "S/MIME?", "Code Signing?", "eIDAS?", "Document Signing?", "External?", "Serial Number", "Subject Key Identifier"
+  GROUP BY sc.SUB_CERTIFICATE, "Issuer DN", "CA Certificate Type", "Subject DN", "Not Before", "Not After", digest(sc.ROOT_PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)", cr.SERIAL_NUMBER, "CA Owner", "TLS?", "S/MIME?", "Code Signing?", "BIMI?", "eIDAS?", "Document Signing?", "External?", "Serial Number", "Subject Key Identifier"
   ORDER BY "Issuer DN", "CA Certificate Type" DESC, "Subject DN", "Not Before", "Not After", digest(sc.ROOT_PUBLIC_KEY, 'sha256'), "SHA-256(Certificate)"
 ) TO 'list_for_cp_cps_and_self_assessment.csv' CSV HEADER
 SQL

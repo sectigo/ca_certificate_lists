@@ -4,6 +4,7 @@
 - When `TLS?` is `TLS`, the Sectigo [TLS CP/CPS](https://www.sectigo.com/cps-repository) is applicable.
 - When `S/MIME?` is `S/MIME`, the Sectigo [S/MIME CP/CPS](https://www.sectigo.com/cps-repository) is applicable.
 - When `Code Signing?` is `CS`, the Sectigo [Code Signing CP/CPS](https://www.sectigo.com/cps-repository) is applicable.
+- When `BIMI?` is `BIMI`, the Sectigo [Mark Certificates CP/CPS](https://www.sectigo.com/cps-repository) is applicable.
 - When `Document Signing?` is `DS`, the Sectigo [Document Signing CP/CPS](https://www.sectigo.com/cps-repository) is applicable.
 - When `eIDAS?` is `eIDAS`, the Sectigo [eIDAS CP/CPS](https://sectigo.com/eIDASCPS) is applicable.
 - When `External?` is `External`, the Subordinate CA is owned and operated by the third-party identified by the `CA Owner` field. The applicable CP/CPS(es) and Self-Assessments are not identified or provided by this repository.
