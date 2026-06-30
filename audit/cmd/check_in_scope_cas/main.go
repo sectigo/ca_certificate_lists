@@ -130,14 +130,76 @@ func main() {
 	}
 
 	// Parse filtered lines into records
-	reRecord := regexp.MustCompile(`^(.*?)\s{2,}([0-9A-Fa-f]{64})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}/\d{1,2}/\d{4})\s*$`)
-	reRecordLoose := regexp.MustCompile(`^(.*?)\s{2,}([0-9A-Fa-f]{60,68})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}/\d{1,2}/\d{4})\s*$`)
+	reRecord := regexp.MustCompile(`^(.*?)\s+([0-9A-Fa-f]{64})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}/\d{1,2}/\d{4})\s*$`)
+	reRecordLoose := regexp.MustCompile(`^(.*?)\s+([0-9A-Fa-f]{60,68})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(\d{1,2}/\d{1,2}/\d{4})\s*$`)
+	// Partial record: SHA-256 wraps to the next line (pdftotext -layout column overflow)
+	rePartialRecord := regexp.MustCompile(`^(.*?)\s+([0-9A-Fa-f]{20,63})\s+(\d{1,2}/\d{1,2}/\d{3,4})\s+(\d{1,2}/\d{1,2}/\d{3,4})\s*$`)
+	// SHA continuation: subject text + hex chars + optional trailing date digits (one or two groups)
+	reShaCont := regexp.MustCompile(`^(.*?)\s+([0-9A-Fa-f]+)(?:\s{2,}(\d{1,4}))?(?:\s{2,}(\d{1,4}))?\s*$`)
+
+	type pendingRecord struct {
+		subjectDN string
+		sha256    string
+		validFrom string
+		validTo   string
+	}
 
 	var records []Record
+	var pending *pendingRecord
+	var orphanLines []string // lines before first record that might be a subject
 	for _, line := range filtered {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
+
+		// If we have a pending partial record, try to get SHA continuation
+		if pending != nil {
+			mc := reShaCont.FindStringSubmatch(line)
+			if mc != nil && len(pending.sha256) < 64 {
+				pending.subjectDN += "\n" + strings.TrimSpace(mc[1])
+				pending.sha256 += mc[2]
+				// Assign trailing digit groups to dates with incomplete years
+				trailing := []string{}
+				if mc[3] != "" {
+					trailing = append(trailing, mc[3])
+				}
+				if mc[4] != "" {
+					trailing = append(trailing, mc[4])
+				}
+				i := 0
+				if i < len(trailing) && dateNeedsCompletion(pending.validFrom) {
+					pending.validFrom += trailing[i]
+					i++
+				}
+				if i < len(trailing) && dateNeedsCompletion(pending.validTo) {
+					pending.validTo += trailing[i]
+					i++
+				}
+				if len(pending.sha256) >= 64 {
+					records = append(records, Record{
+						SubjectDN: pending.subjectDN,
+						SHA256:    pending.sha256,
+						ValidFrom: pending.validFrom,
+						ValidTo:   pending.validTo,
+					})
+					pending = nil
+				}
+				continue
+			}
+			// Continuation didn't match or SHA already complete; finalize pending record
+			if len(pending.sha256) != 64 {
+				fmt.Fprintf(os.Stderr, "Warning: incomplete SHA-256 (%d chars) for: %s\n", len(pending.sha256), firstLine(pending.subjectDN))
+			}
+			records = append(records, Record{
+				SubjectDN: pending.subjectDN,
+				SHA256:    pending.sha256,
+				ValidFrom: pending.validFrom,
+				ValidTo:   pending.validTo,
+			})
+			pending = nil
+			// Fall through to process this line normally
+		}
+
 		m := reRecord.FindStringSubmatch(line)
 		if m == nil {
 			m = reRecordLoose.FindStringSubmatch(line)
@@ -147,19 +209,52 @@ func main() {
 		}
 		if m != nil {
 			// New record
+			subj := strings.TrimSpace(m[1])
+			if subj == "" {
+				// SHA+dates on their own line; recover subject
+				subj = recoverSubject(records, orphanLines)
+			}
 			records = append(records, Record{
-				SubjectDN: strings.TrimSpace(m[1]),
+				SubjectDN: subj,
 				SHA256:    m[2],
 				ValidFrom: m[3],
 				ValidTo:   m[4],
 			})
-		} else if len(records) > 0 {
-			// Continuation of Subject DN
-			records[len(records)-1].SubjectDN += "\n" + strings.TrimSpace(line)
+			orphanLines = nil
 		} else {
-			fmt.Fprintf(os.Stderr, "Error: unexpected line before first record: %s\n", strings.TrimSpace(line))
-			os.Exit(1)
+			// Try partial record match (SHA-256 wrapped to next line)
+			mp := rePartialRecord.FindStringSubmatch(line)
+			if mp != nil {
+				subj := strings.TrimSpace(mp[1])
+				if subj == "" {
+					subj = recoverSubject(records, orphanLines)
+				}
+				pending = &pendingRecord{
+					subjectDN: subj,
+					sha256:    mp[2],
+					validFrom: mp[3],
+					validTo:   mp[4],
+				}
+				orphanLines = nil
+			} else if len(records) > 0 {
+				// Continuation of Subject DN
+				records[len(records)-1].SubjectDN += "\n" + strings.TrimSpace(line)
+			} else {
+				orphanLines = append(orphanLines, strings.TrimSpace(line))
+			}
 		}
+	}
+	// Finalize any trailing pending record
+	if pending != nil {
+		if len(pending.sha256) != 64 {
+			fmt.Fprintf(os.Stderr, "Warning: incomplete SHA-256 (%d chars) for: %s\n", len(pending.sha256), firstLine(pending.subjectDN))
+		}
+		records = append(records, Record{
+			SubjectDN: pending.subjectDN,
+			SHA256:    pending.sha256,
+			ValidFrom: pending.validFrom,
+			ValidTo:   pending.validTo,
+		})
 	}
 
 	// Build lookup of PDF records by SHA-256
@@ -243,9 +338,14 @@ func main() {
 		}
 
 		// Compare Subject DN
-		if normalizeDN(pdfRec.SubjectDN) != normalizeDN(csvDN) {
-			anomalies = append(anomalies, fmt.Sprintf("SUBJECT DN MISMATCH: SHA256=%s\n  PDF: %s\n  CSV: %s",
-				sha, oneLine(pdfRec.SubjectDN), oneLine(csvDN)))
+		pdfDNNorm := normalizeDN(pdfRec.SubjectDN)
+		csvDNNorm := normalizeDN(csvDN)
+		if pdfDNNorm != csvDNNorm {
+			// Check if difference is only whitespace introduced by pdftotext line wrapping
+			if stripSpaces(pdfDNNorm) != stripSpaces(csvDNNorm) {
+				anomalies = append(anomalies, fmt.Sprintf("SUBJECT DN MISMATCH: SHA256=%s\n  PDF: %s\n  CSV: %s",
+					sha, oneLine(pdfRec.SubjectDN), oneLine(csvDN)))
+			}
 		}
 
 		// Compare dates (PDF: M/D/YYYY, CSV: YYYY-MM-DD HH:MM:SS)
@@ -352,6 +452,34 @@ func isCJK(r rune) bool {
 		(r >= 0x2A700 && r <= 0x2B73F) // CJK Extension C
 }
 
+// recoverSubject handles the case where pdftotext puts the subject on its own
+// line and the SHA+dates on the next line (blank subject in the regex match).
+// It either pops the trailing attribute lines from the previous record or uses
+// orphan lines collected before the first record.
+func recoverSubject(records []Record, orphanLines []string) string {
+	if len(records) > 0 {
+		prev := &records[len(records)-1]
+		lines := strings.Split(prev.SubjectDN, "\n")
+		// Find the last line that starts a new attribute (contains "=")
+		lastAttrIdx := -1
+		for i := len(lines) - 1; i > 0; i-- {
+			if strings.Contains(lines[i], "=") {
+				lastAttrIdx = i
+				break
+			}
+		}
+		if lastAttrIdx > 0 {
+			stolen := strings.Join(lines[lastAttrIdx:], "\n")
+			prev.SubjectDN = strings.Join(lines[:lastAttrIdx], "\n")
+			return stolen
+		}
+	}
+	if len(orphanLines) > 0 {
+		return strings.Join(orphanLines, "\n")
+	}
+	return ""
+}
+
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		return s[:i] + "..."
@@ -361,6 +489,19 @@ func firstLine(s string) string {
 
 func oneLine(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", " / "), "\r", "")
+}
+
+func stripSpaces(s string) string {
+	return strings.ReplaceAll(s, " ", "")
+}
+
+// dateNeedsCompletion returns true if the date's year has fewer than 4 digits.
+func dateNeedsCompletion(date string) bool {
+	parts := strings.Split(date, "/")
+	if len(parts) != 3 {
+		return false
+	}
+	return len(parts[2]) < 4
 }
 
 // datesMatch compares a PDF date (M/D/YYYY) with a CSV date (YYYY-MM-DD HH:MM:SS)
