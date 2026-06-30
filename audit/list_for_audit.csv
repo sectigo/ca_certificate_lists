@@ -1,4 +1,4 @@
-CA Certificate Type,Issuer Common Name,Subject DN,SHA-256(Certificate),Not Before,Not After,CA Owner,CCADB Revocation Status,WTCA?,WTNETSEC?,WTBRSSL?,WTEVSSL?,WTCS?,WTSMIME?,WTMC?,Serial Number,Subject Key Identifier
+﻿CA Certificate Type,Issuer Common Name,Subject DN,SHA-256(Certificate),Not Before,Not After,CA Owner,CCADB Revocation Status,WTCA?,WTNETSEC?,WTBRSSL?,WTEVSSL?,WTCS?,WTSMIME?,WTMC?,Serial Number,Subject Key Identifier
 Root,AAA Certificate Services,"CN=AAA Certificate Services
 O=Comodo CA Limited
 L=Salford

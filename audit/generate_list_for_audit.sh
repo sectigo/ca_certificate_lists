@@ -174,3 +174,7 @@ SQL
 done
 
 rm -f $ERRORFILE
+
+echo "EFBBBF" | xxd -r -ps > list_for_audit.csv.new
+cat list_for_audit.csv >> list_for_audit.csv.new
+mv list_for_audit.csv.new list_for_audit.csv
